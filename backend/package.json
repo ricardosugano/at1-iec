@@ -15,7 +15,8 @@
     "check-all": "pnpm run lint && pnpm run format:check",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:unit": "vitest run --exclude \"**/*.integration.test.ts\""
   },
   "keywords": [],
   "author": "",
@@ -63,5 +64,6 @@
     "ignoredBuiltDependencies": [
       "@scarf/scarf"
     ]
+    
   }
 }
