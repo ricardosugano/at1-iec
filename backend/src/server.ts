@@ -4,6 +4,7 @@ import { sequelize } from './config/database';
 
 dotenv.config();
 
+// const teste: number = 'isso não é número';
 const PORT = process.env.PORT || 3000;
 
 async function main() {
