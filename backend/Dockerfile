@@ -1,31 +1,41 @@
-# 1. Define a imagem de origem base 
-FROM node:24-alpine
-
-# Configura o diretório global do pnpm
-ENV PNPM_HOME="/root/.local/share/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-
-# 2. Define diretório de trabalho interno do container
+# ---------- Estágio 1: build ----------
+FROM node:24-alpine AS build
 WORKDIR /app
 
-# 3. Instalar o pnpm globalmente para gerenciar as dependências
-RUN npm install -g pnpm
+# pnpm na mesma versão exigida pelo projeto
+RUN npm install -g pnpm@11 && pnpm config set strict-dep-builds false
 
-# Desativa a restrição do pnpm 11
-RUN pnpm config set strict-dep-builds false
-
-# 4. Copia apenas o manifesto de dependências
+# Copia o manifesto primeiro para aproveitar o cache de camadas
 COPY package.json ./
-
-# 5. Instalar as dependências do projeto
 RUN pnpm install
 
-# 6. Copiat todo os restante do código
+# Copia o código e compila o TypeScript para dist/
 COPY . .
+RUN pnpm build
 
-# 7. Expoe a porta padrão LDW
+# ---------- Estágio 2: produção ----------
+FROM node:24-alpine AS production
+WORKDIR /app
+
+RUN npm install -g pnpm@11 && pnpm config set strict-dep-builds false
+
+# Apenas dependências de produção
+COPY package.json ./
+RUN pnpm install --prod
+
+# Código compilado vindo do estágio de build
+COPY --from=build /app/dist ./dist
+
+# Arquivos que o sequelize-cli e a documentação usam em tempo de execução
+COPY .sequelizerc ./
+COPY src/config ./src/config
+COPY src/migrations ./src/migrations
+COPY src/docs ./src/docs
+
+# Roda com usuário sem privilégios
+USER node
+
 EXPOSE 3000
 
-# 8. Comando para inicializar a aplicação
-CMD ["pnpm", "dev"]
-
+# Aplica as migrations e depois inicia a API
+CMD ["sh", "-c", "./node_modules/.bin/sequelize-cli db:migrate && node dist/server.js"]

@@ -1,44 +1,46 @@
 services:
   db:
     image: postgres:15-alpine
-    container_name: pg-dev-2
+    container_name: at1-postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-postgres}
     ports:
       - "5432:5432"
     volumes:
+      # Persiste os dados do banco mesmo se o container for removido
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # Só considera o banco pronto quando ele aceita conexões
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   api:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: api-service
+    container_name: at1-api
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
-      - PORT=3000
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_NAME=postgres
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_DIALECT=postgres
-      - DB_SSL=false
-      - NODE_ENV=development
-      - CI=true
-      # Habilitar o polling para detectar alterações de arquivos no windows
-      - CHOKIDAR_USEPOLLING=true
-      - CHOKIDAR_INTERVAL=500
+      PORT: 3000
+      NODE_ENV: production
+      # Dentro da rede do Compose, o banco é acessado pelo nome do serviço
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-postgres}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_DIALECT: postgres
+      DB_SSL: "false"
     depends_on:
-      - db
-    volumes:
-      - ./backend:/app
-      - backend_node_modules:/app/node_modules
-    command: pnpm dev
+      db:
+        # A API só sobe depois que o healthcheck do banco passar
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   pgdata:
-  backend_node_modules:
